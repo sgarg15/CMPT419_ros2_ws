@@ -1,0 +1,11 @@
+mcl:
+  ros__parameters:
+    use_sim_time: true
+    motion_noise_trans: 0.05
+    motion_noise_rot: 0.1
+    particle_noise_trans: 0.05
+    particle_noise_rot: 0.1
+    num_particles: 500
+    update_angle_thr: 0.02
+    update_dist_thr: 0.01
+

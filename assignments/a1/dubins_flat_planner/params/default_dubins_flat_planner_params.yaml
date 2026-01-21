@@ -1,0 +1,14 @@
+/dubins_flat_planner:
+  ros__parameters:
+    use_sim_time: false
+    T: 5.0
+    cmd_vel_topic: /cmd_vel
+    control_rate: 10.0
+    goal_theta: 0.0
+    goal_v: 0.1
+    goal_x: 0.5
+    goal_y: -0.5
+    odom_topic: /odom
+    plan_dt: 0.01
+    use_planned_speed: true
+    fixed_speed: 0.5
