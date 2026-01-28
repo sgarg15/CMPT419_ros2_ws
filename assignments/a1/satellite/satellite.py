@@ -27,6 +27,15 @@ def satellite_dynamics(t: float, x: NDArray) -> NDArray:
     dx = np.zeros((4))
 
     # STUDENT CODE START
+    r = x[0]
+    rDot = x[1]
+    theta = x[2]
+    thetaDot = x[3]    
+
+    dx[0] = rDot
+    dx[1] = r * thetaDot**2 - K / r**2
+    dx[2] = thetaDot
+    dx[3] = -2 * rDot * thetaDot / r
     # STUDENT CODE END
 
     return dx
@@ -52,6 +61,18 @@ def RK4(
     x = np.zeros((np.size(t), np.size(x0)))
 
     # STUDENT CODE START
+    h = t[1] - t[0]
+    x[0, :] = x0
+
+    for i in range(len(t) - 1):
+        t_i = t[i]
+        x_i = x[i, :]
+        k1 = dynamics(t_i, x_i)
+        k2 = dynamics(t_i + h/2, x_i + h/2 * k1)
+        k3 = dynamics(t_i + h/2, x_i + h/2 * k2)
+        k4 = dynamics(t_i + h, x_i + h * k3)
+        
+        x[i+1, :] = x_i + (h/6) * (k1 + 2*k2 + 2*k3 + k4)
     # STUDENT CODE END
     return t, x
 
