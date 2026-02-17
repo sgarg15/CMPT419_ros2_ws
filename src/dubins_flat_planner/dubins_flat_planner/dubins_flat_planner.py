@@ -144,6 +144,12 @@ class DubinsFlatPlanner(Node):
         T = float(self.get_parameter("T").value)
 
         # STUDENT CODE START
+        state_traj, ctrl_traj = plan_cubic_flat_trajectory(
+            start=self._latest_start_state,
+            goal=goal,
+            T=T,
+            dt=float(self.get_parameter("plan_dt").value),
+        )
         # STUDENT CODE END
 
         # 3. Package result and disable further planning
@@ -187,6 +193,13 @@ class DubinsFlatPlanner(Node):
         omega_cmd = 0
 
         # STUDENT CODE START
+        idx = np.searchsorted(self._plan.state.t, t_elapsed, side="right") - 1
+        v_cmd = float(self._plan.state.v[idx])
+        omega_cmd = float(self._plan.ctrl.omega[idx])
+        use_planned_speed = bool(self.get_parameter("use_planned_speed").value)
+        if not use_planned_speed:
+            v_cmd = float(self.get_parameter("fixed_speed").value)
+            omega_cmd = 0.0
         # STUDENT CODE END
 
         # 3. Publish velocity command
@@ -199,6 +212,8 @@ class DubinsFlatPlanner(Node):
         """
         msg = Twist()
         # STUDENT CODE START
+        msg.linear.x = v
+        msg.angular.z = omega
         # STUDENT CODE END
 
         self._pub_cmd.publish(msg)

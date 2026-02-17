@@ -158,6 +158,9 @@ class MCL(Node):
 
         # 2. Extract control and call motion model
         # STUDENT CODE START
+        v = msg.twist.twist.linear.x
+        w = msg.twist.twist.angular.z
+        self.mcl.motion_model_prediction(v, w, dt)
         # STUDENT CODE END
 
     def scan_callback(self, msg: LaserScan):
@@ -199,10 +202,27 @@ class MCL(Node):
 
         # 2. Parse LaserScan
         # STUDENT CODE START
+        observations = []
+        
+        for i, range_val in enumerate(msg.ranges):
+            if math.isinf(range_val) or math.isnan(range_val):
+                continue
+            
+            if hasattr(msg, 'range_min') and range_val < msg.range_min:
+                continue
+            if hasattr(msg, 'range_max') and range_val > msg.range_max:
+                continue
+            
+            angle = msg.angle_min + i * msg.angle_increment
+            
+            observations.append((range_val, angle))
         # STUDENT CODE END
 
         # 3. Sensor model update
         # STUDENT CODE START
+        self.mcl.sensor_model_update(observations)
+        self.mcl.normalize_weights()
+        self.mcl.resample()
         # STUDENT CODE END
 
         self.publish_particles()

@@ -1,0 +1,26 @@
+1) Explanation of the plot created for satellite.py:
+    a) Plot of the path of the satellite in the x-y plane.
+        - At that scale, the path of the satellite seems circular. The radius is around 6400 km.
+    b) Plotting `r' which is km above the Earth's center vs time in minutes.
+        - Because we have the initial condition of the satellite to be dot theta = 2 * pi / T which does not exactly satisfy the circular orbit condition which causes the radial acceleration to be non-zero making the orbit elliptical causing the change in altitude.
+        - The distance is oscillating around 410 km to about 477 km. 
+    c) Plotting `theta' which is the angle of the satellite's position in the x-y plane vs time in minutes.
+        - This is linear because angular speed stays roughly constant. If thetadot is constant, then theta is linear.
+    d) Plotting `dot r' which is the radial velocity of the satellite.
+        - This shows how fast the satellite moves inward and outward.
+        - Essentially, when rdot is positive, the satellite is moving outward, and when rdot is negative, the satellite is moving inward
+    e) Plotting `dot theta' which is the angular velocity of the satellite in the x-y plane vs time in minutes.
+        - This is related to r, and when r increases, thetadot decreases. When r decreases, thetadot increases.
+
+
+2) Explanation of the plot created for dubins_flat_planner:
+    a) Plot of the path of the car in x-y plane
+        - It is the geometric path traced by the car.
+        - Given the boundary conditions and the start and the goal, we are asking it to start and end at the origin, but with a different heading. Given the dynamics of a Dubin Car, it cannot rotate in place, so changing heading forces it to do a loop so it can change heading, given the circular path.
+    b) Plot of the various State Trajectories (x, y, theta, v) vs T
+        - This plot overlays four signals, x(t) and y(t) which follows the path of the car, x increasing and y descreasing and going to 0.
+        - The v(t) in red shows the velocity, and even though we set the start and end velocity to be 1, we don't enforce constant speed, so it dips in the middle.
+        - The theta(t) in green, the jump in the heading is because of the atan2 used, it is basically the wrap from positive pi to negative pi. 
+    c) Plot of the Control Trajectories (w, a) vs t
+        - The angular velocity, when it is negative, it is turning clockwise and when it is positive it is turning counter clockwise. Since the path is the bot turning clockwise, this plot matches that being mostly negative, the variation is the curvature of the turn
+        - The linear velocity, when it is negative the bot is slowing down, when positive, speeding up. This plot matches with the v(t) plot.

@@ -29,7 +29,6 @@ def satellite_dynamics(t: float, x: NDArray) -> NDArray:
     # STUDENT CODE START
     r = x[0]
     rDot = x[1]
-    theta = x[2]
     thetaDot = x[3]    
 
     dx[0] = rDot

@@ -47,6 +47,15 @@ def get_constraint_matrix(T: float) -> NDArray:
     constraint_mat = np.zeros((4, 4))
 
     # STUDENT CODE START
+    constraint_mat[0, 0] = 1.0      
+    constraint_mat[1, 1] = 1.0  
+    constraint_mat[2, 0] = 1.0  
+    constraint_mat[2, 1] = T   
+    constraint_mat[2, 2] = T**2 
+    constraint_mat[2, 3] = T**3 
+    constraint_mat[3, 1] = 1.0     
+    constraint_mat[3, 2] = 2.0 * T 
+    constraint_mat[3, 3] = 3.0 * T**2 
     # STUDENT CODE END
 
     return constraint_mat
@@ -73,6 +82,8 @@ def solve_cubic_coeffs_from_endpoints(
     rhs = np.ones(4)  # Replace these
 
     # STUDENT CODE START
+    M = get_constraint_matrix(T)
+    rhs = np.array([p0, v0, pT, vT])
     # STUDENT CODE END
 
     return np.linalg.solve(M, rhs)  # (4,)
@@ -93,6 +104,9 @@ def eval_cubic_and_derivatives(
     pddot = np.zeros_like(t)
 
     # STUDENT CODE START
+    p = coeff[0] + coeff[1]*t + coeff[2]*t**2 + coeff[3]*t**3
+    pdot = coeff[1] + 2*coeff[2]*t + 3*coeff[3]*t**2
+    pddot = 2*coeff[2] + 6*coeff[3]*t
     # STUDENT CODE END
 
     return p, pdot, pddot
@@ -118,6 +132,28 @@ def plan_cubic_flat_trajectory(
     ctrl_traj = ControlTraj()
 
     # STUDENT CODE START
+    t = get_time_grid(T, dt)
+    
+    vx0 = start.v * np.cos(start.theta)
+    vxT = goal.v * np.cos(goal.theta)
+    coeffs_x = solve_cubic_coeffs_from_endpoints(start.x, vx0, goal.x, vxT, T)
+    x, xdot, xddot = eval_cubic_and_derivatives(coeffs_x, t)
+    
+    vy0 = start.v * np.sin(start.theta)
+    vyT = goal.v * np.sin(goal.theta)
+    coeffs_y = solve_cubic_coeffs_from_endpoints(start.y, vy0, goal.y, vyT, T)
+    y, ydot, yddot = eval_cubic_and_derivatives(coeffs_y, t)
+    
+    v = np.sqrt(xdot**2 + ydot**2)
+    theta = np.arctan2(ydot, xdot)
+    
+    v_squared = v**2
+    v_squared = np.where(v_squared < eps, eps, v_squared)
+    omega = (xdot * yddot - ydot * xddot) / v_squared
+    a = (xdot * xddot + ydot * yddot) / np.where(v < eps, eps, v)
+    
+    state_traj = StateTraj(t=t, x=x, y=y, theta=theta, v=v, xdot=xdot, ydot=ydot, xddot=xddot, yddot=yddot)
+    ctrl_traj = ControlTraj(t=t, omega=omega, a=a)
     # STUDENT CODE END
 
     return state_traj, ctrl_traj
