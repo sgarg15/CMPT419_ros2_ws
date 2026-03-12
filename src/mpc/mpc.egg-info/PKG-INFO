@@ -1,0 +1,13 @@
+Metadata-Version: 2.1
+Name: mpc
+Version: 0.0.0
+Summary: ROS2 planner frontend for MPC and MPPI backends.
+Home-page: UNKNOWN
+Maintainer: Mo Chen
+Maintainer-email: mochen@cs.sfu.ca
+License: TODO: License declaration
+Platform: UNKNOWN
+Provides-Extra: test
+
+UNKNOWN
+

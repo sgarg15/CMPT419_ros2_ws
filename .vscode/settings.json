@@ -28,4 +28,7 @@
         "**/log": true
     },
     "ROS2.distro": "humble",
+    "cSpell.words": [
+        "rclpy"
+    ],
 }
