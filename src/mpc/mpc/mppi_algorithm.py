@@ -266,6 +266,8 @@ class MPPI:
                     smoothness = self.w_du * np.sum((action - prev_action) ** 2)
                     cost_t = base_cost + smoothness
                 costs[k, t] = cost_t
+                if t == H - 1:
+                    costs[k, t] *= 20.0
                 state = next_state
                 prev_action = action
         # STUDENT CODE END

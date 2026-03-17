@@ -153,6 +153,23 @@ def solve_mpc(
 
     J = ca.MX(0)
 
+    #Print the paragmeters given
+    print(f"N: {N}")
+    print(f"dt: {dt}")
+    print(f"v_min: {v_min}")
+    print(f"v_max: {v_max}")
+    print(f"omega_max: {omega_max}")
+    print(f"w_pos: {w_pos}")
+    print(f"w_theta: {w_theta}")
+    print(f"w_u: {w_u}")
+    print(f"w_du: {w_du}")
+    print(f"w_pos_T: {w_pos_T}")
+    print(f"w_theta_T: {w_theta_T}")
+    print(f"x0: {x0}")
+    print(f"goal: {goal}")
+    print(f"corridor_params: {corridor_params}")
+    print(f"params: {params}")
+
     # ============================================================
     # Feasible warm start (inside corridor + px bounds)
     # ============================================================
@@ -207,7 +224,7 @@ def solve_mpc(
         e_theta_sq = (X[2, k] - gth) ** 2
         u_sq = U[0, k] ** 2 + U[1, k] ** 2
         J = J + w_pos * ep_sq + w_theta * e_theta_sq + w_u * u_sq
-    # Terminal cost ℓ(x_N)
+    # Terminal cost
     ep_N_sq = (X[0, N] - gx) ** 2 + (X[1, N] - gy) ** 2
     e_theta_N_sq = (X[2, N] - gth) ** 2
     J = J + w_pos_T * ep_N_sq + w_theta_T * e_theta_N_sq

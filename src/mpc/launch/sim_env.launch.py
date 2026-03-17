@@ -24,7 +24,7 @@ DEFAULT_PARAMS_FILES = {
     "mpc_params_file": os.path.join(
         get_package_share_directory("mpc"),
         "params",
-        "default_mpc_planner_params.yaml",
+        "mpc_planner_params.yaml",
     ),
     "rviz_settings": os.path.join(
         get_package_share_directory("mpc"),
@@ -179,6 +179,13 @@ def launch_setup(context, *args, **kwargs):
         parameters=[nav2_params_file],
     )
 
+    goal_marker_node = Node(
+        package="mpc",
+        executable="goal_marker_publisher",
+        name="goal_marker_publisher",
+        parameters=[mpc_params_file],
+    )
+
     # Delay the spawner to give gzserver time to start and register
     # the /spawn_entity service via libgazebo_ros_factory.so
     delayed_spawner = TimerAction(period=5.0, actions=[gazebo_spawner])
@@ -193,6 +200,7 @@ def launch_setup(context, *args, **kwargs):
         amcl_node,
         rviz_node,
         pub_robot_pose_node,
+        goal_marker_node,
     ]
 
 

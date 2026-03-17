@@ -1,0 +1,25 @@
+# Game parameters for reach-avoid (Section VII.A of paper)
+# Override dynamics.GameParams defaults if needed
+
+# Proportional coefficients for defender acceleration (Eq. 16)
+kx: 0.7
+ky: 0.7
+kz: 1.5
+
+# Maximum velocity commands (m/s)
+U_h_D: 6.0   # defender max horizontal speed
+U_h_A: 3.0   # attacker max horizontal speed
+U_z_D: 4.0   # defender max vertical speed
+U_z_A: 2.0   # attacker max vertical speed
+
+# Capture radii (m)
+d_h: 3.0     # horizontal capture radius
+d_z: 1.0     # vertical capture radius
+
+# Spawn positions (m, Gazebo world frame: x forward, y left, z up)
+# Passed to PX4 sitl_multiple_run.sh -s "iris:1:x1:y1,iris:1:x2:y2"
+# Defender = px4_1, Attacker = px4_2
+spawn_defender_x: 0.0
+spawn_defender_y: 3.0
+spawn_attacker_x: 0.0
+spawn_attacker_y: 0.0

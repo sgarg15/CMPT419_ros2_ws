@@ -35,6 +35,23 @@ class GameParams:
     d_h: float = 3.0     # horizontal capture radius (m)
     d_z: float = 1.0     # vertical capture radius (m)
 
+    @classmethod
+    def from_dict(cls, d: dict) -> "GameParams":
+        """Build GameParams from dict (e.g. from YAML). Missing keys use defaults."""
+        if not d:
+            return cls()
+        return cls(
+            kx=float(d.get("kx", 0.7)),
+            ky=float(d.get("ky", 0.7)),
+            kz=float(d.get("kz", 1.5)),
+            U_h_D=float(d.get("U_h_D", 6.0)),
+            U_h_A=float(d.get("U_h_A", 3.0)),
+            U_z_D=float(d.get("U_z_D", 4.0)),
+            U_z_A=float(d.get("U_z_A", 2.0)),
+            d_h=float(d.get("d_h", 3.0)),
+            d_z=float(d.get("d_z", 1.0)),
+        )
+
 
 @dataclass
 class DefenderState:

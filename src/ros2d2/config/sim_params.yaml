@@ -1,0 +1,24 @@
+# Simulation and bridge parameters for 2-drone setup
+
+# Spawn positions (m, world frame, z-up)
+# Defender spawn
+defender_spawn:
+  x: 0.0
+  y: 3.0
+  z: 0.83
+
+# Attacker spawn
+attacker_spawn:
+  x: 0.0
+  y: 0.0
+  z: 0.83
+
+# Takeoff / hover height (m, z-up, above ground)
+# Both drones will be commanded to hover at this height before game starts
+takeoff_height: 5.0
+
+# Bridge node timing
+bridge:
+  heartbeat_hz: 10.0        # offboard heartbeat and setpoint rate
+  arm_delay_sec: 1.0        # seconds of setpoints before arm
+  takeoff_duration_sec: 5.0  # optional: time to reach takeoff height

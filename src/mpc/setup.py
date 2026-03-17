@@ -38,6 +38,7 @@ setup(
     entry_points={
         "console_scripts": [
             "robot_pose_publisher = mpc.robot_pose_publisher:main",
+            "goal_marker_publisher = mpc.goal_marker_publisher:main",
             "mpc = mpc.mpc_planner:main",
         ],
     },
