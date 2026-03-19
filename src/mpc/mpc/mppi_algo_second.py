@@ -260,8 +260,10 @@ class MPPI:
         current_x = np.tile(observation, (K, 1))
         
         for t in range(H):
+            # Get all current actions for time t for all samples
             u_t = actions[:, t, :]
             
+            # Step the dynamics for all samples
             next_states = []
             step_costs = []
             for k in range(K):
@@ -294,22 +296,29 @@ class MPPI:
         # =========================
         # STUDENT CODE START
         
+        # 1. Sample Gaussian noise eps ~ N(0, sigma) of shape (K, H, 2)
         noise = self.sample_noise()
         
+        # 2. Perturb nominal action sequence `self.actions` and **clip** to bounds
         perturbed_actions = self.actions[np.newaxis, :, :] + noise
         perturbed_actions = np.clip(perturbed_actions, self.action_min, self.action_max)
         
+        # 3. Roll out all trajectories and compute total trajectory cost `S_k = sum_t cost[k,t]`
         costs = self.rollout(observation, perturbed_actions)
         S_k = np.sum(costs, axis=1)
         
+        # 4. Compute weights.
         min_S = np.min(S_k)
         exp_S = np.exp(-(S_k - min_S) / self.temperature)
         weights = exp_S / (np.sum(exp_S) + self.epsilon)
     
+        # 5. Update nominal sequence by weighted averaging:
         self.actions = np.sum(weights[:, np.newaxis, np.newaxis] * perturbed_actions, axis=0)
         self.actions = np.clip(self.actions, self.action_min, self.action_max)
         best_action = self.actions[0].copy()
-
+        # 6. Receding horizon shift:
+        #   - return `u_0`
+        #   - shift sequence left and repeat the last element
         self.actions[:-1] = self.actions[1:]
         self.actions[-1] = self.actions[-2]
         

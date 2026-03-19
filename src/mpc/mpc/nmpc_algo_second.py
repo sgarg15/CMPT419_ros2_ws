@@ -100,13 +100,17 @@ def dubins_step(xk: ca.MX, uk: ca.MX, dt: float) -> ca.MX:
       x = [px, py, theta], u = [v, omega]
     Returns x_{k+1} as a CasADi vector of shape (3,).
     """
-    px, py, theta = xk[0], xk[1], xk[2]
-    v, omega = uk[0], uk[1]
-    x_new = ca.vertcat(
-        px + dt * v * ca.cos(theta),
-        py + dt * v * ca.sin(theta),
-        theta + dt * omega,
-    )
+    x_new = None  # NOTE: dummy
+
+    # TODO:
+    # STUDENT CODE START
+    px, py, th = xk[0], xk[1], xk[2]
+    v, om = uk[0], uk[1]
+    x_new = ca.vertcat(px + v * ca.cos(th) * dt,
+                       py + v * ca.sin(th) * dt,
+                       th + om * dt)
+    # STUDENT CODE END
+
     return x_new
 
 
@@ -178,45 +182,53 @@ def solve_mpc(
     # STUDENT TODO: constraints + objective
     # ============================================================
     # STUDENT CODE START
-    # Initial condition (Q1b)
-    opti.subject_to(X[:, 0] == x0_dm)
-
-    # Dynamics: x_{k+1} = dubins_step(x_k, u_k, dt) for k=0..N-1 (Q1b)
+    opti.subject_to(X[:, 0] == x0_dm)  # NOT HAVING THIS MADE MY ROBOT JUST SIT STILL
+    
     for k in range(N):
-        opti.subject_to(X[:, k + 1] == dubins_step(X[:, k], U[:, k], dt))
+        xk = X[:, k]
+        uk = U[:, k]
+        xk_next = X[:, k + 1]
 
-    # Corridor + px bounds for all k=0..N (Q1: Eq 2; readme: include terminal)
-    for k in range(N + 1):
-        px_k = X[0, k]
-        py_k = X[1, k]
-        opti.subject_to(px_k >= x_min)
-        opti.subject_to(px_k <= x_max)
-        opti.subject_to(py_k >= y_low(px_k, corridor_params))
-        opti.subject_to(py_k <= y_high(px_k, corridor_params))
+        # Dynamics constraint
+        opti.subject_to(xk_next == dubins_step(xk, uk, dt))
 
-    # Control bounds for k=0..N-1 (Q1: Eq 3)
-    for k in range(N):
-        opti.subject_to(U[0, k] >= v_min)
-        opti.subject_to(U[0, k] <= v_max)
-        opti.subject_to(U[1, k] >= -omega_max)
-        opti.subject_to(U[1, k] <= omega_max)
+        # Corridor constraints
+        opti.subject_to(y_low(xk[0], corridor_params) <= xk[1])
+        opti.subject_to(xk[1] <= y_high(xk[0], corridor_params))
 
-    # Objective (Q2 Eq 7): running cost + terminal cost + control smoothness
-    for k in range(N):
-        ep_sq = (X[0, k] - gx) ** 2 + (X[1, k] - gy) ** 2
-        th_err = ca.atan2(ca.sin(X[2, k] - gth), ca.cos(X[2, k] - gth))
-        e_theta_sq = th_err ** 2
-        u_sq = U[0, k] ** 2 + U[1, k] ** 2
-        J = J + w_pos * ep_sq + w_theta * e_theta_sq + w_u * u_sq
+        # Specify x limits so error isnt thrown
+        opti.subject_to(x_min <= xk[0])
+        opti.subject_to(xk[0] <= x_max)
+
+        # Control limits
+        opti.subject_to(v_min <= uk[0])
+        opti.subject_to(uk[0] <= v_max)
+        opti.subject_to(-omega_max <= uk[1])
+        opti.subject_to(uk[1] <= omega_max)
+
+        # Cost
+        J += w_pos * ((xk[0] - gx) ** 2 + (xk[1] - gy) ** 2)
+        th_err = ca.atan2(ca.sin(xk[2] - gth), ca.cos(xk[2] - gth))
+        J += w_theta * th_err ** 2
+        J += w_u * (uk[0] ** 2 + uk[1] ** 2)
+
+        if k > 0:
+            uk_prev = U[:, k - 1]
+            J += w_du * ((uk[0] - uk_prev[0]) ** 2 + (uk[1] - uk_prev[1]) ** 2)
+    
+    xN = X[:, N]
+    
+    # Terminal constraint
+    opti.subject_to(y_low(xN[0], corridor_params) <= xN[1])
+    opti.subject_to(xN[1] <= y_high(xN[0], corridor_params))
+    opti.subject_to(x_min <= xN[0])
+    opti.subject_to(xN[0] <= x_max)
+    
     # Terminal cost
-    ep_N_sq = (X[0, N] - gx) ** 2 + (X[1, N] - gy) ** 2
-    thN_err = ca.atan2(ca.sin(X[2, N] - gth), ca.cos(X[2, N] - gth))
-    e_theta_N_sq = thN_err ** 2
-    J = J + w_pos_T * ep_N_sq + w_theta_T * e_theta_N_sq
-    # Smoothness: w_du * ||u_k - u_{k-1}||^2 for k=1..N-1
-    for k in range(1, N):
-        du_sq = (U[0, k] - U[0, k - 1]) ** 2 + (U[1, k] - U[1, k - 1]) ** 2
-        J = J + w_du * du_sq
+    J += w_pos_T * ((xN[0] - gx) ** 2 + (xN[1] - gy) ** 2)
+    thN_err = ca.atan2(ca.sin(xN[2] - gth), ca.cos(xN[2] - gth))
+    J += w_theta_T * thN_err ** 2
+    
     # STUDENT CODE END
 
     opti.minimize(J)

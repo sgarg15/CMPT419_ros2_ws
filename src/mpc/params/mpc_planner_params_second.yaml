@@ -1,7 +1,7 @@
 /mpc_planner:
   ros__parameters:
-    # backend_class: mpc.mppi_algorithm:MPPIController
-    backend_class: mpc.nmpc_algorithm:NMPCController
+    backend_class: mpc.mppi_algorithm:MPPIController
+    #backend_class: mpc.nmpc_algorithm:NMPCController
     pose_topic: /robot_pose
     cmd_vel_topic: /cmd_vel
 
@@ -9,8 +9,8 @@
     dt: 0.1
     seed: 7
 
-    goal_x: 3.5
-    goal_y: 2.5
+    goal_x: -3.0
+    goal_y: 3.5
     goal_theta: 0.0
 
     v_min: 0.0
@@ -44,14 +44,3 @@
     mpc.solver_max_iter: 1000
     mpc.solver_tol: 1.0e-6
     mpc.solver_constr_viol_tol: 1.0e-4
-
-# Goal marker for RViz (must match goal_x, goal_y, goal_theta above)
-# Corridor params must match mpc_planner for visualization
-/goal_marker_publisher:
-  ros__parameters:
-    goal_x: 1.0
-    goal_y: 3.5
-    goal_theta: 0.0
-    x_knots: [-5.0, -3.0, -1.0, 1.0, 3.0, 5.0]
-    y_low_knots: [-10.0, -10.0, -10.0, -10.0, -10.0, -10.0]
-    y_high_knots: [10.0, 10.0, 10.0, 10.0, 10.0, 10.0]
