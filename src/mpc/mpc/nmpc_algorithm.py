@@ -4,6 +4,8 @@ import casadi as ca
 import numpy as np
 from numpy.typing import NDArray
 
+from controller.controller_base import ControllerBackend
+
 # =======================
 # Constants / Defaults: Do not modify!
 # =======================
@@ -100,13 +102,16 @@ def dubins_step(xk: ca.MX, uk: ca.MX, dt: float) -> ca.MX:
       x = [px, py, theta], u = [v, omega]
     Returns x_{k+1} as a CasADi vector of shape (3,).
     """
-    px, py, theta = xk[0], xk[1], xk[2]
-    v, omega = uk[0], uk[1]
-    x_new = ca.vertcat(
-        px + dt * v * ca.cos(theta),
-        py + dt * v * ca.sin(theta),
-        theta + dt * omega,
-    )
+    x_new = None  # NOTE: dummy
+
+    # TODO:
+    # STUDENT CODE START
+    px_next = xk[0] + uk[0] * ca.cos(xk[2]) * dt
+    py_next = xk[1] + uk[0] * ca.sin(xk[2]) * dt
+    th_next = xk[2] + uk[1] * dt
+    x_new = ca.vertcat(px_next, py_next, th_next)
+    # STUDENT CODE END
+
     return x_new
 
 
@@ -178,45 +183,45 @@ def solve_mpc(
     # STUDENT TODO: constraints + objective
     # ============================================================
     # STUDENT CODE START
-    # Initial condition (Q1b)
+
+    # Initial condition
     opti.subject_to(X[:, 0] == x0_dm)
 
-    # Dynamics: x_{k+1} = dubins_step(x_k, u_k, dt) for k=0..N-1 (Q1b)
+    # Dynamics + input bounds + stage cost for k=0..N-1
     for k in range(N):
-        opti.subject_to(X[:, k + 1] == dubins_step(X[:, k], U[:, k], dt))
+        xk = X[:, k]
+        uk = U[:, k]
 
-    # Corridor + px bounds for all k=0..N (Q1: Eq 2; readme: include terminal)
+        # Dynamics
+        opti.subject_to(X[:, k + 1] == dubins_step(xk, uk, dt))
+
+        # Input bounds
+        opti.subject_to(opti.bounded(v_min, uk[0], v_max))
+        opti.subject_to(opti.bounded(-omega_max, uk[1], omega_max))
+
+        # Stage cost
+        ep = ca.vertcat(xk[0] - gx, xk[1] - gy)
+        eth = xk[2] - gth  # no wrapping (per handout)
+        J += w_pos * ca.sumsqr(ep) + w_theta * (eth ** 2) + w_u * ca.sumsqr(uk)
+
+    # Corridor + px bounds for all k=0..N (terminal included)
     for k in range(N + 1):
-        px_k = X[0, k]
-        py_k = X[1, k]
-        opti.subject_to(px_k >= x_min)
-        opti.subject_to(px_k <= x_max)
-        opti.subject_to(py_k >= y_low(px_k, corridor_params))
-        opti.subject_to(py_k <= y_high(px_k, corridor_params))
+        px = X[0, k]
+        py = X[1, k]
+        opti.subject_to(opti.bounded(x_min, px, x_max))
+        opti.subject_to(py >= y_low(px, corridor_params))
+        opti.subject_to(py <= y_high(px, corridor_params))
 
-    # Control bounds for k=0..N-1 (Q1: Eq 3)
-    for k in range(N):
-        opti.subject_to(U[0, k] >= v_min)
-        opti.subject_to(U[0, k] <= v_max)
-        opti.subject_to(U[1, k] >= -omega_max)
-        opti.subject_to(U[1, k] <= omega_max)
+    # Terminal cost at k=N
+    xN = X[:, N]
+    epN = ca.vertcat(xN[0] - gx, xN[1] - gy)
+    ethN = xN[2] - gth
+    J += w_pos_T * ca.sumsqr(epN) + w_theta_T * (ethN ** 2)
 
-    # Objective (Q2 Eq 7): running cost + terminal cost + control smoothness
-    for k in range(N):
-        ep_sq = (X[0, k] - gx) ** 2 + (X[1, k] - gy) ** 2
-        th_err = ca.atan2(ca.sin(X[2, k] - gth), ca.cos(X[2, k] - gth))
-        e_theta_sq = th_err ** 2
-        u_sq = U[0, k] ** 2 + U[1, k] ** 2
-        J = J + w_pos * ep_sq + w_theta * e_theta_sq + w_u * u_sq
-    # Terminal cost
-    ep_N_sq = (X[0, N] - gx) ** 2 + (X[1, N] - gy) ** 2
-    thN_err = ca.atan2(ca.sin(X[2, N] - gth), ca.cos(X[2, N] - gth))
-    e_theta_N_sq = thN_err ** 2
-    J = J + w_pos_T * ep_N_sq + w_theta_T * e_theta_N_sq
-    # Smoothness: w_du * ||u_k - u_{k-1}||^2 for k=1..N-1
+    # Smoothness cost: sum_{k=1}^{N-1} w_du ||u_k - u_{k-1}||^2
     for k in range(1, N):
-        du_sq = (U[0, k] - U[0, k - 1]) ** 2 + (U[1, k] - U[1, k - 1]) ** 2
-        J = J + w_du * du_sq
+        du = U[:, k] - U[:, k - 1]
+        J += w_du * ca.sumsqr(du)
     # STUDENT CODE END
 
     opti.minimize(J)
@@ -297,23 +302,30 @@ class NMPCController(ControllerBackend):
         }
 
     # @override
-    def get_action(self, observation: NDArray) -> NDArray:
+    def get_action(self, observation: NDArray) -> Tuple[NDArray, NDArray, NDArray]:
         """Return control action [v, omega] for the provided state."""
         x0 = np.asarray(observation, dtype=float).reshape(3)
         try:
-            _, U = solve_mpc(
+            X, U = solve_mpc(
                 x0=x0,
                 goal=self._goal,
                 corridor_params=self._corridor,
                 params=self._params,
             )
         except Exception:
-            return np.array([0.0, 0.0], dtype=float)
+            return np.array([0.0, 0.0], dtype=float), None, None
 
         if U.shape[0] == 0 or np.any(np.isnan(U[0])):
-            return np.array([0.0, 0.0], dtype=float)
-        return np.clip(
-            np.asarray(U[0], dtype=float).reshape(2), self._action_min, self._action_max
+            return np.array([0.0, 0.0], dtype=float), None, None
+
+        return (
+            np.clip(
+                np.asarray(U[0], dtype=float).reshape(2),
+                self._action_min,
+                self._action_max,
+            ),
+            X,
+            U,
         )
 
 

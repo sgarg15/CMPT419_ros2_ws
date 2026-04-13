@@ -1,4 +1,0 @@
-[console_scripts]
-mpc = mpc.mpc_planner:main
-robot_pose_publisher = mpc.robot_pose_publisher:main
-

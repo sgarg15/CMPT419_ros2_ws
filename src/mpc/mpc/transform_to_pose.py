@@ -2,9 +2,9 @@ import rclpy
 import rclpy.time
 import tf2_ros
 from geometry_msgs.msg import PoseStamped
+from rcl_interfaces.msg import SetParametersResult
 from rclpy.node import Node
 from tf2_ros import TransformException
-from rcl_interfaces.msg import SetParametersResult
 
 
 class TransformToPose(Node):

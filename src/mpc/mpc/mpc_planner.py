@@ -1,34 +1,24 @@
 """ROS2 planner frontend"""
-
 import importlib
 import math
 from typing import Any, Dict, Tuple
 
 import numpy as np
 import rclpy
-from geometry_msgs.msg import Twist, PoseStamped
-from nav_msgs.msg import Odometry
+from geometry_msgs.msg import PoseStamped, Twist
+from nav_msgs.msg import Odometry, Path
+from numpy.typing import NDArray
 from rclpy.node import Node
+from std_msgs.msg import ColorRGBA
+from visualization_msgs.msg import Marker, MarkerArray
 
 from mpc.controller_base import ControllerBackend
-
-
-def euler_from_quaternion(
-    x: float, y: float, z: float, w: float
-) -> Tuple[float, float, float]:
-    t0 = 2.0 * (w * x + y * z)
-    t1 = 1.0 - 2.0 * (x * x + y * y)
-    roll = math.atan2(t0, t1)
-
-    t2 = 2.0 * (w * y - x * z)
-    t2 = 1.0 if t2 > 1.0 else t2
-    t2 = -1.0 if t2 < -1.0 else t2
-    pitch = math.asin(t2)
-
-    t3 = 2.0 * (w * z + x * y)
-    t4 = 1.0 - 2.0 * (y * y + z * z)
-    yaw = math.atan2(t3, t4)
-    return roll, pitch, yaw
+from nav_helpers.trajectory import (
+    StateActionTrajectory,
+    euler_from_quaternion,
+    quaternion_from_euler,
+)
+from nav_helpers_msgs.msg import StateActionTrajectory as TrajMsg
 
 
 def load_backend_class(backend_class_path: str):
@@ -102,18 +92,21 @@ class MPCPlanner(Node):
         # TODO: Add a subscriber, publisher, and timer
         # =========================
         # STUDENT CODE START
-        self._robot_state = None
-        self._pose_sub = self.create_subscription(
-            PoseStamped, pose_topic, self._pose_callback, 10
+        self._latest_state = None
+        self._sub_pose = self.create_subscription(
+            PoseStamped, pose_topic, self._on_pose, 10
         )
-        self._cmd_vel_pub = self.create_publisher(Twist, cmd_vel_topic, 10)
-        self._control_timer = self.create_timer(1.0 / rate_hz, self._control_callback)
+        self._pub_cmd = self.create_publisher(Twist, cmd_vel_topic, 10)
+        self._timer = self.create_timer(1.0 / rate_hz, self._on_timer)
         # STUDENT CODE END
+
+        self.traj_marker_pub = self.create_publisher(MarkerArray, "traj_markers", 10)
+        self.traj_path_pub = self.create_publisher(Path, "traj_path", 10)
+        self.traj_pub = self.create_publisher(TrajMsg, "traj", 10)
 
         self.get_logger().info(
             f"MPCPlanner up. backend_class={backend_class}, rate={rate_hz:.1f}Hz"
         )
-
 
     def _build_backend(self) -> ControllerBackend:
         backend_class_path = str(self.get_parameter("backend_class").value)
@@ -180,33 +173,114 @@ class MPCPlanner(Node):
     # TODO: Implement callback functions for subscriber and timer
     # =========================
     # STUDENT CODE START
-    def _pose_callback(self, msg: PoseStamped) -> None:
+    def _on_pose(self, msg: PoseStamped) -> None:
+        q = msg.pose.orientation
         _, _, yaw = euler_from_quaternion(
-            msg.pose.orientation.x,
-            msg.pose.orientation.y,
-            msg.pose.orientation.z,
-            msg.pose.orientation.w,
+            float(q.x), float(q.y), float(q.z), float(q.w)
         )
-        self._robot_state = np.array(
-            [msg.pose.position.x, msg.pose.position.y, yaw], dtype=float
+        self._latest_state = np.array(
+            [float(msg.pose.position.x), float(msg.pose.position.y), float(yaw)],
+            dtype=float,
         )
 
-    def _control_callback(self) -> None:
-        if self._robot_state is None:
+    def _on_timer(self) -> None:
+        if self._latest_state is None:
             return
-        if not rclpy.ok():
-            return
-        action = self._backend.get_action(self._robot_state)
-        if np.any(np.isnan(action)) or np.any(np.isinf(action)):
-            action = np.array([0.0, 0.0], dtype=float)
-        twist = Twist()
-        twist.linear.x = float(action[0])
-        twist.angular.z = float(action[1])
         try:
-            self._cmd_vel_pub.publish(twist)
-        except Exception:
-            pass
+            u, X, U = self._backend.get_action(self._latest_state)
+            u = np.asarray(u, dtype=float).reshape(2)
+
+        except Exception as exc:
+            self.get_logger().error(f"Backend get_action failed: {exc}")
+            u = np.array([0.0, 0.0], dtype=float)
+            X = None
+            U = None
+
+        msg = Twist()
+        msg.linear.x = float(u[0])
+        msg.angular.z = float(u[1])
+        self._pub_cmd.publish(msg)
+
+        if X is not None:
+            self.publish_traj_as_markers(X)
+            self.publish_traj_as_path(X)
+
+            if U is not None:
+                self.publish_traj(X, U, dt=self._backend._params["dt"])
+
     # STUDENT CODE END
+
+    def publish_traj_as_path(self, arr):
+        path = Path()
+
+        # Header for the whole path
+        path.header.frame_id = "map"
+        path.header.stamp = self.get_clock().now().to_msg()
+
+        for (x, y, yaw) in arr:
+            pose = PoseStamped()
+
+            pose.header.frame_id = "map"
+            pose.header.stamp = path.header.stamp  # keep consistent timing
+
+            pose.pose.position.x = float(x)
+            pose.pose.position.y = float(y)
+            pose.pose.position.z = 0.0
+
+            q = quaternion_from_euler(0, 0, yaw)
+            pose.pose.orientation.w = q[0]
+            pose.pose.orientation.x = q[1]
+            pose.pose.orientation.y = q[2]
+            pose.pose.orientation.z = q[3]
+
+            path.poses.append(pose)
+
+        self.traj_path_pub.publish(path)
+
+    def publish_traj_as_markers(self, arr):
+        markers = MarkerArray()
+
+        for i, (x, y, yaw) in enumerate(arr):
+            m = Marker()
+            m.header.frame_id = "map"
+            m.header.stamp = self.get_clock().now().to_msg()
+
+            m.ns = "poses"
+            m.id = i
+            m.type = Marker.ARROW
+            m.action = Marker.ADD
+
+            m.pose.position.x = float(x)
+            m.pose.position.y = float(y)
+            m.pose.position.z = 0.0
+
+            q = quaternion_from_euler(0, 0, yaw)
+            m.pose.orientation.w = q[0]
+            m.pose.orientation.x = q[1]
+            m.pose.orientation.y = q[2]
+            m.pose.orientation.z = q[3]
+
+            m.scale.x = 0.05  # arrow length
+            m.scale.y = 0.02
+            m.scale.z = 0.02
+
+            m.color = ColorRGBA(r=1.0, g=0.0, b=1.0, a=1.0)
+
+            markers.markers.append(m)
+
+        self.traj_marker_pub.publish(markers)
+
+    def publish_traj(self, X: NDArray, U: NDArray, dt: float, frame_id: str = "map"):
+        """
+        Publishes the state action trajectory (needed for LQR to use as reference)
+        """
+        state_action_traj = StateActionTrajectory(
+            states=X,
+            actions=U,
+            dt=dt,
+            frame_id=frame_id,
+        )
+        self.traj_pub.publish(state_action_traj.to_msg(self.get_clock()))
 
 
 def main():

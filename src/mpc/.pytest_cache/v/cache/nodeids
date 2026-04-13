@@ -1,9 +1,0 @@
-[
-  "test/test_mppi_algorithm.py::test_closed_loop_progress_and_stays_in_corridor",
-  "test/test_mppi_algorithm.py::test_get_action_respects_bounds_and_shifts_dubins",
-  "test/test_mppi_algorithm.py::test_rollout_includes_du_smoothness_penalty",
-  "test/test_mppi_algorithm.py::test_rollout_shapes_and_values_simple_dubins",
-  "test/test_nmpc_algorithm.py::test_constraints_dynamics_and_goal_progress",
-  "test/test_nmpc_algorithm.py::test_dubins_step_correctness_simple",
-  "test/test_nmpc_algorithm.py::test_solve_mpc_shapes_and_finite"
-]

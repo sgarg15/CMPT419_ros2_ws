@@ -2,16 +2,7 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import (
-    DeclareLaunchArgument,
-    IncludeLaunchDescription,
-    ExecuteProcess,
-    OpaqueFunction,
-    SetEnvironmentVariable,
-    TimerAction,
-)
-from launch.conditions import IfCondition
-from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.actions import DeclareLaunchArgument, ExecuteProcess, OpaqueFunction
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
@@ -47,9 +38,15 @@ def launch_setup(context, *args, **kwargs):
     nav2_bringup_dir = get_package_share_directory("nav2_bringup")
     tb3_gazebo_dir = get_package_share_directory("turtlebot3_gazebo")
     nav2_bringup_launch_dir = os.path.join(nav2_bringup_dir, "launch")
+    mpc_models_dir = os.path.join(mpc_dir, "models")
+    tb3_models_dir = os.path.join(tb3_gazebo_dir, "models")
+
+    existing_model_path = os.environ.get("GAZEBO_MODEL_PATH", "")
+    gazebo_model_path = ":".join(
+        p for p in [mpc_models_dir, tb3_models_dir, existing_model_path] if p
+    )
 
     nav2_params_file = LaunchConfiguration("nav2_params_file")
-    mpc_params_file = LaunchConfiguration("mpc_params_file")
     rviz_settings_file = LaunchConfiguration("rviz_settings_file").perform(context)
 
     map_file = LaunchConfiguration("map_file").perform(context)
@@ -131,12 +128,14 @@ def launch_setup(context, *args, **kwargs):
             world,
         ],
         cwd=[nav2_bringup_launch_dir],
+        additional_env={"GAZEBO_MODEL_PATH": gazebo_model_path},
         output="screen",
     )
 
     gazebo_client = ExecuteProcess(
         cmd=["gzclient"],
         cwd=[nav2_bringup_launch_dir],
+        additional_env={"GAZEBO_MODEL_PATH": gazebo_model_path},
         output="screen",
     )
 
@@ -173,57 +172,25 @@ def launch_setup(context, *args, **kwargs):
         ],
     )
 
-    pub_robot_pose_node = Node(
-        package="mpc",
-        executable="robot_pose_publisher",
-        parameters=[nav2_params_file],
-    )
-
-    goal_marker_node = Node(
-        package="mpc",
-        executable="goal_marker_publisher",
-        name="goal_marker_publisher",
-        parameters=[mpc_params_file],
-    )
-
-    # Delay the spawner to give gzserver time to start and register
-    # the /spawn_entity service via libgazebo_ros_factory.so
-    delayed_spawner = TimerAction(period=5.0, actions=[gazebo_spawner])
-
     return [
         gazebo_server,
         gazebo_client,
-        delayed_spawner,
+        gazebo_spawner,
         robot_state_publisher,
         map_server_node,
         lifecycle_manager_node,
         amcl_node,
         rviz_node,
-        pub_robot_pose_node,
-        goal_marker_node,
     ]
 
 
 def generate_launch_description():
-    mpc_models_dir = os.path.join(get_package_share_directory("mpc"), "models")
-
     return LaunchDescription(
         [
-            SetEnvironmentVariable(
-                "GAZEBO_MODEL_PATH",
-                mpc_models_dir
-                + ":"
-                + os.environ.get("GAZEBO_MODEL_PATH", ""),
-            ),
             DeclareLaunchArgument(
                 "nav2_params_file",
                 default_value=DEFAULT_PARAMS_FILES["nav2_params_file"],
                 description="Nav2 parameters file to use",
-            ),
-            DeclareLaunchArgument(
-                "mpc_params_file",
-                default_value=DEFAULT_PARAMS_FILES["mpc_params_file"],
-                description="MPC parameters file to use",
             ),
             DeclareLaunchArgument(
                 "run_rviz",

@@ -122,9 +122,7 @@ def dubins_running_cost(
     gx, gy, gth = float(goal[0]), float(goal[1]), float(goal[2])
 
     pos_err_sq = (px - gx) ** 2 + (py - gy) ** 2
-    # angle wrap to maybe fix my spinning problem
-    th_err = float(np.arctan2(np.sin(th - gth), np.cos(th - gth)))
-    th_err_sq = th_err ** 2
+    th_err_sq = (th - gth) ** 2
     u_sq = float(u[0] * u[0] + u[1] * u[1])
 
     viol_sq = corridor_violation_sq(px, py, corridor_params)
@@ -254,29 +252,28 @@ class MPPI:
         # TODO: Implement MPPI rollout
         # =========================
         # STUDENT CODE START
+        observation = np.asarray(observation, dtype=float).reshape(
+            3,
+        )
+        actions = np.asarray(actions, dtype=float)
+        assert actions.ndim == 3, "actions must be (K, H, m)"
         K, H, m = actions.shape
+        assert H == self.horizon and m == self.act_dim
+
         costs = np.zeros((K, H), dtype=float)
-        
-        current_x = np.tile(observation, (K, 1))
-        
-        for t in range(H):
-            u_t = actions[:, t, :]
-            
-            next_states = []
-            step_costs = []
-            for k in range(K):
-                x_next, cost = self.dynamics_func(current_x[k], u_t[k])
-                next_states.append(x_next)
-                step_costs.append(cost)
-            
-            current_x = np.array(next_states)
-            costs[:, t] = np.array(step_costs)
-            
-            # Smoothness penalty
-            if t > 0:
-                u_prev = actions[:, t-1, :]
-                du_sq = np.sum((u_t - u_prev) ** 2, axis=1)
-                costs[:, t] += self.w_du * du_sq
+
+        for k in range(K):
+            x = observation.copy()
+            u_prev = None
+            for t in range(H):
+                u = actions[k, t]
+                x, c = self.dynamics_func(x, u)
+                c_val = float(np.asarray(c).reshape(-1)[0])
+                if t >= 1 and u_prev is not None:
+                    du = u - u_prev
+                    c_val += self.w_du * float(np.dot(du, du))
+                costs[k, t] = c_val
+                u_prev = u
         # STUDENT CODE END
 
         return costs
@@ -293,26 +290,42 @@ class MPPI:
         # TODO: Implement MPPI per the handout.
         # =========================
         # STUDENT CODE START
-        
-        noise = self.sample_noise()
-        
-        perturbed_actions = self.actions[np.newaxis, :, :] + noise
-        perturbed_actions = np.clip(perturbed_actions, self.action_min, self.action_max)
-        
-        costs = self.rollout(observation, perturbed_actions)
-        S_k = np.sum(costs, axis=1)
-        
-        min_S = np.min(S_k)
-        exp_S = np.exp(-(S_k - min_S) / self.temperature)
-        weights = exp_S / (np.sum(exp_S) + self.epsilon)
-    
-        self.actions = np.sum(weights[:, np.newaxis, np.newaxis] * perturbed_actions, axis=0)
-        self.actions = np.clip(self.actions, self.action_min, self.action_max)
-        best_action = self.actions[0].copy()
+        observation = np.asarray(observation, dtype=float)
 
-        self.actions[:-1] = self.actions[1:]
-        self.actions[-1] = self.actions[-2]
-        
+        # 1) sample noise and build perturbed actions (K, H, m)
+        noise = self.sample_noise()
+        perturbed = self.actions.reshape(1, self.horizon, self.act_dim) + noise
+        perturbed = np.clip(
+            perturbed,
+            self.action_min.reshape(1, 1, self.act_dim),
+            self.action_max.reshape(1, 1, self.act_dim),
+        )
+
+        # 2) rollout -> per-step costs, then total costs
+        costs = self.rollout(observation, perturbed)
+        total_costs = np.sum(costs, axis=1)  # (K,)
+
+        # 3) importance weights with baseline subtraction
+        min_cost = float(np.min(total_costs))
+        norm_costs = total_costs - min_cost
+        weights = np.exp((-1.0 / self.temperature) * norm_costs)  # (K,)
+        w_sum = float(np.sum(weights)) + self.epsilon
+
+        # 4) weighted average update of the whole sequence
+        weighted_actions = np.sum(
+            weights.reshape(self.n_traj, 1, 1) * perturbed, axis=0
+        )  # (H, m)
+        new_actions = weighted_actions / w_sum
+        new_actions = np.clip(
+            new_actions,
+            self.action_min.reshape(1, self.act_dim),
+            self.action_max.reshape(1, self.act_dim),
+        )
+
+        # 5) receding-horizon: return first action, then shift
+        best_action = new_actions[0].copy()
+        self.actions = np.roll(new_actions, shift=-1, axis=0)
+        self.actions[-1] = self.actions[-2]  # duplicate last
         # STUDENT CODE END
 
         return best_action
@@ -372,8 +385,13 @@ class MPPIController(ControllerBackend):
     def get_action(self, observation: NDArray) -> NDArray:
         """Return control action [v, omega] for the provided state."""
         u = self._controller.get_action(np.asarray(observation, dtype=float).reshape(3))
-        return np.clip(
-            np.asarray(u, dtype=float).reshape(2), self._action_min, self._action_max
+        return (
+            np.clip(
+                np.asarray(u, dtype=float).reshape(2),
+                self._action_min,
+                self._action_max,
+            ),
+            None,
         )
 
 
