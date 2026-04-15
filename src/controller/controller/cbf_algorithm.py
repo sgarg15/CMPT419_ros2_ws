@@ -446,12 +446,13 @@ class CBFController(ControllerBackend):
 
     def __init__(self, config):
         cfg = dict(config.get("cbf", {}))
+        omega_max = float(cfg.get("omega_max", cfg.get("w_max", 1.2)))
 
         u_min = np.array(
-            [float(cfg.get("v_min", -0.2)), float(cfg.get("w_min", -1.2))], dtype=float
+            [float(cfg.get("v_min", -0.2)), -omega_max], dtype=float
         )
         u_max = np.array(
-            [float(cfg.get("v_max", 1.0)), float(cfg.get("w_max", 1.2))], dtype=float
+            [float(cfg.get("v_max", 1.0)), omega_max], dtype=float
         )
 
         self._u_min = u_min
@@ -472,17 +473,15 @@ class CBFController(ControllerBackend):
         full_params.update(self._params)
 
         # Build obstacle dict from params (or fall back to defaults)
+        obstacle_cfg = dict(self._params.get("obstacle", {}))
         obstacle = {
-            "center": np.array(
-                [
-                    float(self._params.get("obstacle_cx", DEFAULT_OBSTACLE["center"][0])),
-                    float(self._params.get("obstacle_cy", DEFAULT_OBSTACLE["center"][1])),
-                ],
+            "center": np.asarray(
+                obstacle_cfg.get("center", DEFAULT_OBSTACLE["center"]),
                 dtype=float,
-            ),
-            "radius": float(self._params.get("obstacle_radius", DEFAULT_OBSTACLE["radius"])),
+            ).reshape(2),
+            "radius": float(obstacle_cfg.get("radius", DEFAULT_OBSTACLE["radius"])),
             "safety_margin": float(
-                self._params.get("obstacle_safety_margin", DEFAULT_OBSTACLE["safety_margin"])
+                obstacle_cfg.get("safety_margin", DEFAULT_OBSTACLE["safety_margin"])
             ),
         }
 

@@ -48,8 +48,8 @@ my_car = DubinsCar2(
 # ── Unsafe set (obstacle + safety margin) ─────────────────────────────────────
 # Obstacle centre (4.3, 0.15), radius 0.50, safety margin 0.20
 # → effective radius = 0.70; theta dimension is ignored (cylinder)
-obstacle_center = np.array([4.3, 0.15, 0.0])
-obstacle_radius = 0.50 + 0.20          # 0.70
+obstacle_center = np.array([1.26, -0.204, 0.0])
+obstacle_radius = 0.1 + 0.10         # 0.70
 
 unsafe_set = CylinderShape(
     grid=g,
